@@ -14,7 +14,7 @@ alwaysApply: true
 |----------|----------|
 | `docs/rules/task.md` | Текущая задача (читай первым) |
 | `docs/rules/plan.md` | План работы (веди актуальным) |
-| `system-doc.md` | System Design Document (источник истины) |
+| `@docs/system-design.md` | System Design Document (источник истины) |
 | `docs/product-proposal.md` | Продуктовое предложение, метрики, архитектура |
 | `docs/governance.md` | Риски, безопасность, политики логирования |
 
@@ -93,7 +93,7 @@ agent-travel-devops   → все (деплоит всё)
 
 ### 1. Планирование
 
-1. Изучи System Design Document `system-doc.md` для полного понимания архитектуры
+1. Изучи System Design Document `@docs/system-design.md` для полного понимания архитектуры
 2. Изучи глобальную задачу → `docs/rules/task.md`
 3. `agent-task-planner`: декомпозиция `docs/rules/task.md` → `docs/rules/plan.md`
 4. Для каждого пункта плана укажи ответственного агента
