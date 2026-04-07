@@ -41,6 +41,8 @@ graph TB
     GRAF -->|"HTTP / PromQL"| PROM
 ```
 
+![Диаграмма](docs/diagrams/c4-container.png)
+
 ## Пояснения
 
 | Элемент | Роль |

@@ -28,6 +28,13 @@ Rel(telegram, ta, "Инициирует доставку", "Webhook: push апд
 Rel(ta, telegram, "Инициирует TravelAgent", "Исходящие вызовы Bot API (ответы в чат и т.д.).")
 Rel(ta, llm, "Инициирует TravelAgent", "Запросы к модели (tool-calling, стриминг).")
 Rel(ta, crm, "Инициирует TravelAgent", "Создание и обновление лидов.")
+
+UpdateRelStyle(manager, ta, $offsetX="-1", $offsetY="-50")
+UpdateRelStyle(telegram, ta, $offsetX="-300", $offsetY="200")
+UpdateRelStyle(ta, telegram, $offsetX="-30", $offsetY="200")
+UpdateRelStyle(ta, llm, $offsetX="120", $offsetY="200")
+UpdateRelStyle(ta, crm, $offsetX="300", $offsetY="200")
+UpdateRelStyle(client, ta, $offsetX="-423", $offsetY="50")
 ```
 
 ## Пояснения

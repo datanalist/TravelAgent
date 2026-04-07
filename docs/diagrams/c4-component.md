@@ -91,6 +91,9 @@ flowchart TB
   T_LOG -->|"аудит"| PG
 ```
 
+![Диаграмма](docs/diagrams/c4-component.png)
+
+
 ## Пояснения
 
 | Компонент | Назначение |

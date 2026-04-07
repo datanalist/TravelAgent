@@ -73,6 +73,8 @@ flowchart TD
     style N fill:#ccf,stroke:#333
 ```
 
+![Диаграмма](docs/diagrams/workflow-request.png)
+
 ### Уточнение по ReAct
 
 Цикл **ReAct** управляется **Orchestrator-ом** (не LLM Connector-ом). При наличии `tool_calls` Orchestrator выполняет tools и передаёт observations обратно в LLM. Счётчик шагов увеличивается; при **шаге > 5** дальнейшие tool-calls не выполняются — формируется **принудительный финальный ответ** с пояснением (ADR-007). Узел **«LLM API OK?»** включает до **3 повторов** с exponential backoff; при исчерпании попыток срабатывает **Circuit Breaker** (open после 5 ошибок за 60с → cooldown 30с).
