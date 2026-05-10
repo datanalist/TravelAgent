@@ -12,8 +12,6 @@ alwaysApply: true
 
 | Документ | Описание |
 |----------|----------|
-| `docs/rules/task.md` | Текущая задача (читай первым) |
-| `docs/rules/plan.md` | План работы (веди актуальным) |
 | `@docs/system-design.md` | System Design Document (источник истины) |
 | `docs/product-proposal.md` | Продуктовое предложение, метрики, архитектура |
 | `docs/governance.md` | Риски, безопасность, политики логирования |
@@ -43,7 +41,7 @@ ruff format && ruff check # Форматирование + линтинг
 
 ### Архитектура агентов
 
-**Спецификация каждого агента хранится в его собственном MD-файле** (например, `docs/agents/agent-travel-backend.md`). Там описаны: цель агента, его ответственность, используемые SKILLs и правила принятия решений.
+**Спецификация каждого агента хранится в его собственном MD-файле** в каталоге `.cursor/agents/` (например, `.cursor/agents/agent-travel-backend.md`). Там описаны: цель агента, его ответственность, используемые SKILLs и правила принятия решений.
 
 **SKILLs** — это атомарные специализированные навыки (отдельные файлы `SKILL.md`). Агент выбирает нужный SKILL в зависимости от контекста решаемой задачи. Один агент может использовать несколько SKILLs.
 
@@ -53,16 +51,12 @@ ruff format && ruff check # Форматирование + линтинг
 
 | Задача | Агент | Приоритет |
 |--------|-------|-----------|
-| FastAPI endpoints, Orchestrator, Router, Decision Logic | `agent-travel-backend` | 🔴 Critical |
+| FastAPI endpoints, Orchestrator, Router, Decision Logic, Telegram API | `agent-travel-backend` | 🔴 Critical |
 | LLM Connector, tool-calling, streaming (SSE), промпты | `agent-travel-llm` | 🔴 Critical |
 | Memory Layer: Redis (session), PostgreSQL (профиль, сессии, leads) | `agent-travel-dba` | 🔴 Critical |
-| Telegram Bot, нормализация сообщений, webhook | `agent-travel-telegram` | 🟡 High |
-| Web SSE / Web-чат (SPA), frontend | `agent-travel-frontend` | 🟡 High |
 | Auth, rate limiting, prompt injection, PII | `agent-travel-security` | 🟡 High |
 | Docker, ngrok, Prometheus/Grafana, деплой | `agent-travel-devops` | 🟡 High |
 | Unit/integration тесты, acceptance сценарии | `agent-travel-test` | 🟡 High |
-| Планирование и декомпозиция | `agent-task-planner` | По задаче |
-| Документация (отчёты, architecture, README) | `agent-technical-writer` | По задаче |
 
 ### Правила маршрутизации
 
@@ -73,69 +67,3 @@ ruff format && ruff check # Форматирование + линтинг
 5. **Cross-cutting задачи** — декомпозируй через `agent-task-planner`, выполняй последовательно
 6. **Зависимости между агентами:**
 
-```
-agent-travel-llm      → agent-travel-backend (tool-calling интерфейс)
-agent-travel-backend  → agent-travel-dba (читает/пишет PostgreSQL, Redis)
-agent-travel-telegram → agent-travel-backend (webhook → internal ChatMessage)
-agent-travel-frontend → agent-travel-backend (REST/SSE /chat/stream)
-agent-travel-security → agent-travel-backend (auth middleware, rate limit)
-agent-travel-test     → все (тестирует всё)
-agent-travel-devops   → все (деплоит всё)
-```
-
----
-
-## Процесс работы
-
-1. `.` — выполнить пункт "1. Планирование"
-2. Оповестить и дождаться команды `***`
-3. После `***` — выполнять пункты из плана, маршрутизируя каждый к нужному агенту
-
-### 1. Планирование
-
-1. Изучи System Design Document `@docs/system-design.md` для полного понимания архитектуры
-2. Изучи глобальную задачу → `docs/rules/task.md`
-3. `agent-task-planner`: декомпозиция `docs/rules/task.md` → `docs/rules/plan.md`
-4. Для каждого пункта плана укажи ответственного агента
-
-### 2. Реализация
-
-- Определи агента по матрице маршрутизации
-- Прочитай MD-файл спецификации агента перед вызовом (`docs/agents/<agent-name>.md`)
-- Агент сам определяет нужный SKILL исходя из контекста задачи — не навязывай SKILL извне
-- ПРОАКТИВНО делегируй задачи агентам через Task tool
-- Используй **параллельные** вызовы агентов для независимых задач
-
-### 3. Документация (`agent-technical-writer`)
-
-- Новый модуль/компонент → обновить `docs/product-proposal.md` (архитектурный раздел)
-- Архитектура изменилась >30% → обновить `README.md`
-- Новый эксперимент с промптами → отчёт в `docs/experiments/`
-
-### 4. Завершение
-
-Все пункты плана выполнены → уведомить КАПСОМ.
-
----
-
-## Временный код
-
-Код не для продакшена (заглушки, seed-скрипты, тесты гипотез):
-- Лаконичный, без комментариев и docstrings
-- Удалять после выполнения
-
-## Запреты
-
-- **md-файлы** — только указанные в документации
-- **Зависимости** — только после согласования
-- **Переусложнение** — минимальное решение (особенно в PoC)
-- **Домыслы** — не придумывать поведение, которого нет в system-doc.md
-- **Git** — без разрешения
-- **task.md** — НЕ ИЗМЕНЯЙ ЭТОТ ФАЙЛ. Он — твоё руководство
-- **Удаление** — ВСЕГДА СПРАШИВАЙ РАЗРЕШЕНИЕ
-- **Смешивание доменов** — не выполняй задачу агента, который за это отвечает, руками. Делегируй
-- **Галлюцинации по турам** — агент никогда не придумывает цены/даты/отели, только данные из `search_tours`
-
-## Язык
-
-Отвечай на русском.
