@@ -68,16 +68,56 @@
 TravelAgent/
 ├── README.md
 ├── docs/
+│   ├── system-design.md          # Источник истины по архитектуре
 │   ├── product-proposal.md
-│   └── governance.md
-├── src/                        # (будет в следующих milestone)
-├── data/                       # (каталог туров, seed-данные)
-└── tests/                      # (тесты)
+│   ├── governance.md
+│   ├── specs/
+│   │   ├── spec-orchestrator.md
+│   │   ├── spec-memory-context.md
+│   │   ├── spec-observability.md
+│   │   ├── spec-tools-api.md
+│   │   ├── spec-retriever.md
+│   │   └── spec-serving-config.md
+│   └── diagrams/
+│       ├── c4-context.md
+│       ├── c4-container.md
+│       ├── c4-component.md
+│       ├── data-flow.md
+│       ├── workflow-request.md
+│       └── state-machine-funnel.md
+├── src/                          # Backend (FastAPI, агент, tools, memory)
+├── data/                         # Каталог туров, seed-данные
+└── tests/                        # Тесты
 ```
 
 ---
 
 ## Документация
 
-- [Продуктовое предложение](docs/product-proposal.md) — обоснование идеи, метрики, архитектура, data flow
+### Архитектура
+
+- [**System Design**](docs/system-design.md) — источник истины: ADR, модули, workflow, memory, tools, деплой
+- [Продуктовое предложение](docs/product-proposal.md) — обоснование идеи, метрики, data flow
 - [Governance](docs/governance.md) — реестр рисков, политика логирования, безопасность
+
+### Спецификации компонентов (`docs/specs/`)
+
+| Спецификация | Домен | Описание |
+|---|---|---|
+| [spec-orchestrator.md](docs/specs/spec-orchestrator.md) | Backend | Orchestrator, Router, Decision Logic |
+| [spec-memory-context.md](docs/specs/spec-memory-context.md) | DBA | Memory Layer: Redis, PostgreSQL, Summarizer, Profile Updater |
+| [spec-observability.md](docs/specs/spec-observability.md) | DevOps | Метрики, логи, алерты, evals, Prompt Management |
+| [spec-tools-api.md](docs/specs/spec-tools-api.md) | Backend | Tools Layer: search_tours, create_lead, get_policy_info |
+| [spec-retriever.md](docs/specs/spec-retriever.md) | Backend | Retrieval-контур, векторный поиск |
+| [spec-serving-config.md](docs/specs/spec-serving-config.md) | DevOps | Конфигурация, деплой, LLM-провайдеры |
+
+### Диаграммы (`docs/diagrams/`)
+
+| Диаграмма | Описание |
+|---|---|
+| [state-machine-funnel.md](docs/diagrams/state-machine-funnel.md) | State Machine воронки продаж (cold → closing) |
+| [c4-context.md](docs/diagrams/c4-context.md) | C4 Context — система в окружении |
+| [c4-container.md](docs/diagrams/c4-container.md) | C4 Container — контейнеры системы |
+| [c4-component.md](docs/diagrams/c4-component.md) | C4 Component — компоненты ядра |
+| [data-flow.md](docs/diagrams/data-flow.md) | Поток данных |
+| [workflow-request.md](docs/diagrams/workflow-request.md) | Workflow обработки запроса |

@@ -161,22 +161,89 @@
 
 ### 5.1 Что извлекается
 
-| Факт | Метод извлечения | Куда пишется |
+Каждое извлечённое значение сопровождается **confidence score** (0.0–1.0), отражающим уверенность в правильности извлечения. Поле записывается в `client_profile` только если `confidence >= 0.70`.
+
+| Факт | Метод извлечения | Confidence | Куда пишется |
+|---|---|---|---|
+| Бюджет (мин/макс) | `regex_currency` — точное число + единица | 0.95 | `client_profile.budget_range` |
+| Бюджет (приблизительный) | LLM-extraction («около 150к», «не дороже...») | 0.75 | `client_profile.budget_range` |
+| Город вылета (явный) | regex / справочник городов РФ | 0.90 | `client_profile.constraints.departure_city` |
+| Город вылета (косвенный) | LLM-extraction | 0.65 → не пишется | — |
+| Даты (dd.mm.yyyy) | regex точный | 0.95 | `leads.travel_dates` |
+| Даты (месяц словом) | regex нормализация | 0.85 | `leads.travel_dates` |
+| Даты (приблизительные) | LLM-extraction («в феврале», «на НГ») | 0.70 | `leads.travel_dates` |
+| Стиль отдыха | LLM-классификация (4 класса) | 0.80 | `client_profile.travel_style` |
+| Дети (явное упоминание) | regex / LLM | 0.90 | `client_profile.constraints.children` |
+| Дети (косвенное) | LLM-inference | 0.60 → не пишется | — |
+| Визовые ограничения | LLM-extraction | 0.75 | `client_profile.constraints.visa_issues` |
+| Питание / авиакомпании | LLM-extraction | 0.75 | `client_profile.constraints` |
+| Предпочитаемые направления | LLM-extraction | 0.80 | `client_profile.preferred_destinations` |
+
+### 5.2 Шкала confidence
+
+| Диапазон | Метод | Поведение |
 |---|---|---|
-| Бюджет (мин/макс) | regex (`\d+\s*(к|тыс|руб|$)`) + LLM fallback | `client_profile.budget_range` |
-| Город вылета | LLM-extraction | `client_profile.constraints` |
-| Даты путешествия | regex (dd.mm.yyyy, месяц словом) + LLM | `leads.travel_dates` |
-| Стиль отдыха | LLM-классификация | `client_profile.travel_style` |
-| Дети | regex / LLM | `client_profile.constraints.children` |
-| Визовые ограничения | LLM-extraction | `client_profile.constraints.visa_issues` |
-| Питание / авиакомпании | LLM-extraction | `client_profile.constraints` |
-| Предпочитаемые направления | LLM-extraction | `client_profile.preferred_destinations` |
+| 0.90–1.00 | Точный regex, справочник | Записать, не перезаписывать более высоким |
+| 0.75–0.89 | LLM с высокой уверенностью | Записать |
+| 0.60–0.74 | LLM с неопределённостью | Не записывать, логировать как `candidate` |
+| < 0.60 | Нет явных сигналов | Игнорировать |
 
-### 5.2 Запись
+### 5.3 Хранение confidence
 
+Поле `profile_confidence` в `client_profile` хранит score по каждому извлечённому факту:
+
+```json
+{
+  "budget_range": {
+    "value": {"min": 100000, "max": 200000, "currency": "RUB"},
+    "confidence": 0.95,
+    "method": "regex_currency",
+    "updated_at": "2026-02-01T14:30:00Z"
+  },
+  "travel_style": {
+    "value": "beach",
+    "confidence": 0.80,
+    "method": "llm_classification",
+    "updated_at": "2026-02-01T14:31:00Z"
+  },
+  "departure_city": {
+    "value": "Москва",
+    "confidence": 0.90,
+    "method": "city_dictionary",
+    "updated_at": "2026-02-01T14:30:00Z"
+  }
+}
 ```
-UPSERT client_profile SET <поле> = <значение>, updated_at = NOW()
-WHERE client_id = <id>
+
+Схема в PostgreSQL: поле `profile_confidence JSONB` в таблице `client_profile`.
+
+### 5.4 Алгоритм обновления с confidence
+
+```python
+def update_profile_field(client_id: str, field: str, value: Any, confidence: float, method: str):
+    existing = get_profile_confidence(client_id, field)
+    if existing and existing["confidence"] >= confidence:
+        # Не перезаписываем более уверенное значение менее уверенным
+        return
+    if confidence < 0.70:
+        log_candidate(client_id, field, value, confidence)
+        return
+    upsert_profile(client_id, field, value)
+    upsert_confidence(client_id, field, confidence, method)
+```
+
+### 5.5 Запись
+
+```sql
+INSERT INTO client_profile (client_id, budget_range, profile_confidence, updated_at)
+VALUES (:client_id, :value, :confidence_json, NOW())
+ON CONFLICT (client_id)
+DO UPDATE SET
+  budget_range = EXCLUDED.budget_range,
+  profile_confidence = client_profile.profile_confidence || EXCLUDED.profile_confidence,
+  updated_at = NOW()
+WHERE (EXCLUDED.profile_confidence->>'confidence')::float
+    > COALESCE((client_profile.profile_confidence->>'confidence')::float, 0);
 ```
 
 Profile Updater срабатывает после каждого сообщения от пользователя (асинхронно, не блокирует ответ).

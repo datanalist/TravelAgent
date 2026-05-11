@@ -245,3 +245,244 @@ groups:
 | Трейсы (spans) | Jaeger / managed | 7 дней |
 | Eval-результаты | PostgreSQL (`evals`) | 90 дней |
 | Агрегированные бизнес-метрики | PostgreSQL | Бессрочно |
+
+---
+
+## 11. Prompt / Eval Management
+
+### 11.1 Prompt Registry
+
+Все промпты, используемые в системе, версионируются и хранятся централизованно. Это позволяет откатиться, сравнивать версии и запускать CI-eval при изменениях.
+
+#### Таблица `prompts` (PostgreSQL)
+
+| Поле | Тип | Описание |
+|---|---|---|
+| `id` | UUID PK | Идентификатор записи |
+| `name` | VARCHAR | Логическое имя (`router_intent`, `summarizer`, `tone_judge`, ...) |
+| `version` | VARCHAR | Семантическая версия (`1.0.0`, `1.1.0`) |
+| `content_hash` | CHAR(64) | SHA-256 от текста промпта (детектор изменений) |
+| `system_prompt` | TEXT | Системный промпт |
+| `user_template` | TEXT | Шаблон user-части (Jinja2 / f-string) |
+| `provider` | VARCHAR | Целевой провайдер (`claude`, `openai`, `mistral`, `any`) |
+| `tags` | JSONB | `["router", "few-shot"]` |
+| `author` | VARCHAR | Кто создал / изменил |
+| `created_at` | TIMESTAMPTZ | Время создания |
+| `is_active` | BOOLEAN | Используется ли прямо сейчас |
+
+#### Реестр активных промптов
+
+| Имя (`name`) | Версия | Компонент | Описание |
+|---|---|---|---|
+| `router_intent` | 1.0.0 | Router | Few-shot классификация intent (JSON output) |
+| `summarizer` | 1.0.0 | Conversation Summarizer | Сжатие диалога в 3–5 фактов |
+| `main_agent` | 1.0.0 | LLM Connector | Системный промпт агента (тон, роль, правила) |
+| `profile_extractor` | 1.0.0 | Profile Updater | Извлечение фактов о клиенте |
+| `stage_classifier` | 1.0.0 | Stage Tracker | Классификация стадии воронки |
+| `tone_judge` | 1.0.0 | LLM-as-Judge | Оценка соответствия high-end тону |
+
+#### Хранение файлов промптов
+
+```
+prompts/
+├── router_intent/
+│   ├── v1.0.0.md          # Промпт в markdown-формате
+│   └── v1.1.0.md
+├── summarizer/
+│   └── v1.0.0.md
+├── main_agent/
+│   └── v1.0.0.md
+└── ...
+```
+
+При деплое `content_hash` пересчитывается и сверяется с БД. Расхождение → предупреждение в логах.
+
+---
+
+### 11.2 Golden Dataset
+
+Золотой датасет — аннотированные примеры для offline-eval агентных компонентов. Хранится в `data/golden/`.
+
+#### Структура датасета
+
+```
+data/golden/
+├── router/             # Примеры для intent classification
+│   └── examples.jsonl
+├── decision/           # Примеры для stage transition
+│   └── examples.jsonl
+├── tone/               # Примеры для оценки high-end тона
+│   └── examples.jsonl
+└── tool_calls/         # Примеры корректных tool-вызовов
+    └── examples.jsonl
+```
+
+#### Схема одного примера (JSONL)
+
+```json
+{
+  "id": "router_001",
+  "component": "router",
+  "input": {
+    "message": "Хочу слетать на Мальдивы в феврале, бюджет до 200к",
+    "context": {"stage": "cold", "prior_messages": []}
+  },
+  "expected_output": {
+    "intent": "itinerary_search"
+  },
+  "metadata": {
+    "difficulty": "easy",
+    "annotator": "human",
+    "created_at": "2026-02-01"
+  }
+}
+```
+
+#### Распределение датасета (минимум)
+
+| Компонент | Количество | Категории |
+|---|---|---|
+| Router (intent) | 40+ | по 5–7 на каждый intent |
+| Decision Logic | 30+ | по 4–5 на каждую стадию |
+| High-end Tone | 20+ | passing / failing примеры |
+| Tool-calls | 20+ | корректные / некорректные параметры |
+| **Итого** | **110+** | — |
+
+Датасет пополняется из:
+1. Ручной разметки (новые edge-cases, найденные в продакшне)
+2. Экспорта реальных сессий с исправленными метками (раз в 2 недели)
+
+---
+
+### 11.3 CI-eval Pipeline
+
+Eval-пайплайн запускается автоматически при каждом деплое и при изменении промптов.
+
+#### Шаги пайплайна
+
+```
+1. [trigger]    PR merge в main / изменение файла в prompts/
+2. [load]       Загрузить golden dataset из data/golden/
+3. [run]        Прогнать каждый пример через актуальный компонент
+4. [score]      Сравнить вывод с expected_output (exact match / LLM-judge)
+5. [report]     Записать результаты в PostgreSQL (таблица evals)
+6. [gate]       Если score < SLO-порога → fail деплой / алерт
+```
+
+#### Конфигурация CI (GitHub Actions фрагмент)
+
+```yaml
+name: eval-pipeline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "prompts/**"
+      - "src/router.py"
+      - "src/decision.py"
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run evals
+        run: uv run python -m evals.run --dataset data/golden/ --report evals/report.json
+      - name: Check SLO gates
+        run: uv run python -m evals.gate --report evals/report.json --config evals/slo.yaml
+```
+
+#### Конфигурация порогов (`evals/slo.yaml`)
+
+```yaml
+gates:
+  router_accuracy:
+    metric: accuracy
+    threshold: 0.85
+    action: fail_deploy
+
+  decision_accuracy:
+    metric: accuracy
+    threshold: 0.80
+    action: fail_deploy
+
+  tool_call_correctness:
+    metric: param_accuracy
+    threshold: 0.80
+    action: fail_deploy
+
+  tone_score:
+    metric: llm_judge_pass_rate
+    threshold: 0.75
+    action: warn_only
+```
+
+#### Таблица `evals` (PostgreSQL)
+
+| Поле | Тип | Описание |
+|---|---|---|
+| `id` | UUID PK | ID записи |
+| `run_id` | UUID | Идентификатор запуска пайплайна |
+| `component` | VARCHAR | `router`, `decision`, `tone`, `tool_calls` |
+| `prompt_name` | VARCHAR | Имя промпта из реестра |
+| `prompt_version` | VARCHAR | Версия промпта |
+| `example_id` | VARCHAR | ID примера из golden dataset |
+| `input` | JSONB | Входные данные |
+| `expected` | JSONB | Ожидаемый вывод |
+| `actual` | JSONB | Фактический вывод LLM |
+| `score` | NUMERIC(4,3) | 0.000–1.000 |
+| `passed` | BOOLEAN | Прошёл ли порог |
+| `latency_ms` | INT | Время выполнения |
+| `tokens_used` | INT | Токены |
+| `created_at` | TIMESTAMPTZ | Время запуска |
+
+---
+
+### 11.4 A/B-тесты промптов
+
+A/B-тесты позволяют сравнивать версии промптов на реальном трафике без полного переключения.
+
+#### Схема разделения трафика
+
+```python
+def get_prompt_variant(client_id: str, prompt_name: str) -> str:
+    """Детерминированное назначение варианта по client_id."""
+    bucket = int(hashlib.md5(f"{client_id}:{prompt_name}".encode()).hexdigest(), 16) % 100
+    config = ab_config[prompt_name]  # из env / БД
+    if bucket < config["control_pct"]:
+        return config["control_version"]   # напр. "1.0.0"
+    else:
+        return config["treatment_version"] # напр. "1.1.0"
+```
+
+**Принципы:**
+- Разделение по `client_id` (не по сессии) — клиент всегда видит один вариант
+- Минимальная длительность теста: 7 дней или 200+ сессий на вариант
+- Метрики успеха: конверсия в лид, tone score (LLM-judge), latency
+
+#### Конфигурация A/B теста
+
+```json
+{
+  "prompt_name": "summarizer",
+  "control_version": "1.0.0",
+  "treatment_version": "1.1.0",
+  "control_pct": 50,
+  "start_date": "2026-03-01",
+  "end_date": "2026-03-15",
+  "primary_metric": "lead_conversion_rate",
+  "secondary_metrics": ["latency_ms", "tokens_used"]
+}
+```
+
+#### Оценка результатов
+
+| Метрика | Метод сравнения | Порог значимости |
+|---|---|---|
+| Конверсия в лид | Z-test по долям | p < 0.05 |
+| Tone score | Mann-Whitney U | p < 0.05 |
+| Latency | Сравнение p95 | Δ > 500ms считается регрессией |
+| Стоимость токенов | Среднее ± std | Δ > 20% считается регрессией |
+
+Результаты сохраняются в таблицу `evals` с тегом `ab_test_run_id`.
