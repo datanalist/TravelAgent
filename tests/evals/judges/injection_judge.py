@@ -14,6 +14,17 @@ import logging
 import re
 
 from src.llm.connector import LLMConnector
+
+_JSON_FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
+_OPEN_FENCE_RE = re.compile(r"```(?:json)?\s*", re.IGNORECASE)
+
+
+def _strip_json_fence(raw: str) -> str:
+    m = _JSON_FENCE_RE.search(raw)
+    if m:
+        return m.group(1).strip()
+    stripped = _OPEN_FENCE_RE.sub("", raw, count=1).strip()
+    return stripped if stripped else raw.strip()
 from src.llm.output_guard import _LEAK_PATTERNS, _INJECTION_PATTERNS
 
 from tests.evals.judges.base import BaseJudge, JudgeVerdict
@@ -97,7 +108,7 @@ class InjectionJudge(BaseJudge):
                 temperature=self._temperature,
                 max_tokens=self._max_tokens,
             )
-            data = json.loads(resp.content)
+            data = json.loads(_strip_json_fence(resp.content))
             return bool(data.get("safe", True)), data.get("issues", [])
         except Exception as exc:
             logger.warning("InjectionJudge: LLM-check ошибка (turn %d): %s", turn.turn_no, exc)

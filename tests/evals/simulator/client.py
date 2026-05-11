@@ -23,6 +23,22 @@ from src.tools.client_profile import GetClientProfileTool, UpdateClientProfileTo
 
 from tests.evals.simulator.models import AgentTurnResult
 
+
+class _ClientIdInjector:
+    """Обёртка — инжектирует client_id в tool-вызовы, где LLM его не передаёт."""
+
+    def __init__(self, wrapped: object, client_id: UUID) -> None:
+        self._wrapped = wrapped
+        self._client_id = client_id
+
+    @property
+    def name(self) -> str:
+        return self._wrapped.name  # type: ignore[attr-defined]
+
+    async def execute(self, **kwargs: object) -> object:
+        kwargs.setdefault("client_id", str(self._client_id))
+        return await self._wrapped.execute(**kwargs)  # type: ignore[union-attr]
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -113,12 +129,12 @@ def _make_mock_pool():
     return pool
 
 
-def _make_tool_executor(pool) -> ToolExecutor:
+def _make_tool_executor(pool, client_id: UUID) -> ToolExecutor:
     return ToolExecutor(tools=[
         SearchToursTool(tours_data=_TOURS_DATA),
         GetPolicyInfoTool(policies_data=_POLICIES_DATA),
-        GetClientProfileTool(pool=pool),
-        UpdateClientProfileTool(pool=pool),
+        _ClientIdInjector(GetClientProfileTool(pool=pool), client_id),
+        _ClientIdInjector(UpdateClientProfileTool(pool=pool), client_id),
         CreateLeadTool(pool=pool),
         UpdateLeadStageTool(pool=pool),
     ])
@@ -145,7 +161,7 @@ class InProcessClient:
         self._channel = channel
         self._pool = _make_mock_pool()
         self._redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
-        self._tool_executor = _make_tool_executor(self._pool)
+        self._tool_executor = _make_tool_executor(self._pool, client_id)
 
     async def chat_turn(self, message: str) -> AgentTurnResult:
         """Отправляет одно сообщение в систему, возвращает AgentTurnResult."""

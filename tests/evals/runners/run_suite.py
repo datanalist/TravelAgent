@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import io
 import json
 import logging
 import sys
@@ -241,7 +242,12 @@ def _print_report(results: list[dict], report_path: Path | None = None):
                 lines.append(f"- **{judge_name}**: {icon} score={agg['score']:.2f} — {'; '.join(agg['reasons'])}")
 
     report = "\n".join(lines)
-    print(report)
+    # Безопасный вывод для Windows-терминалов (cp1251 не поддерживает ✅/❌)
+    try:
+        print(report)
+    except UnicodeEncodeError:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        print(report)
 
     if report_path:
         _REPORTS_DIR.mkdir(parents=True, exist_ok=True)

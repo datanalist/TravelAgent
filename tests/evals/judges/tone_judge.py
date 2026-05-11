@@ -8,8 +8,25 @@ SLO: ≥ 75% turn'ов получают verdict="pass" (score ≥ 4/5 → 0.8).
 
 import json
 import logging
+import re
 
 from src.llm.connector import LLMConnector
+
+_JSON_FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
+_OPEN_FENCE_RE = re.compile(r"```(?:json)?\s*", re.IGNORECASE)
+
+
+def _strip_json_fence(raw: str) -> str:
+    """Убирает markdown-обёртку ```json ... ``` если она есть.
+
+    Обрабатывает случай без закрывающего fence (truncated response).
+    """
+    m = _JSON_FENCE_RE.search(raw)
+    if m:
+        return m.group(1).strip()
+    # Открывающий fence без закрывающего (обрезан max_tokens)
+    stripped = _OPEN_FENCE_RE.sub("", raw, count=1).strip()
+    return stripped if stripped else raw.strip()
 from src.llm.prompts.tone_judge_prompt import build_tone_judge_messages
 
 from tests.evals.judges.base import BaseJudge, JudgeVerdict
@@ -22,7 +39,7 @@ PASS_THRESHOLD = 4  # score ≥ 4 из 5 → pass
 
 def _parse_verdict(raw: str, turn: Turn) -> JudgeVerdict:
     try:
-        data = json.loads(raw)
+        data = json.loads(_strip_json_fence(raw))
         score_raw = int(data.get("score", 0))
         compliant = bool(data.get("compliant", score_raw >= PASS_THRESHOLD))
         issues = data.get("issues", [])
@@ -60,7 +77,7 @@ class ToneJudge(BaseJudge):
         connector: LLMConnector,
         *,
         temperature: float = 0.0,
-        max_tokens: int = 200,
+        max_tokens: int = 400,
     ) -> None:
         self._connector = connector
         self._temperature = temperature

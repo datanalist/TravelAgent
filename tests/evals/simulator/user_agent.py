@@ -147,11 +147,16 @@ class UserBehaviourAgent:
             *_history_to_messages(history),
         ]
 
-        # Если история пуста — подталкиваем начать
+        # Завершаем сообщениями от user, чтобы Claude генерировал следующий user-turn
         if not history:
             messages.append({
                 "role": "user",
                 "content": "Начни диалог — напиши своё первое сообщение консьержу.",
+            })
+        else:
+            messages.append({
+                "role": "user",
+                "content": "Напиши следующее сообщение консьержу (продолжай роль).",
             })
 
         try:
