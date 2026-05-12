@@ -1,0 +1,27 @@
+version: 1
+name: happy_warm_destination
+display_name: "Happy path: «хочу в тепло»"
+category: happy_path
+goal: >
+  Получить конкретные рекомендации туров в тёплое место (Мальдивы, Бали
+  или аналог) с ценами, датами и уровнем отеля. Завершить диалог довольным.
+max_turns: 8
+expected_outcome:
+  goal_success: true
+  hallucination: false
+  pii_leak: false
+playbook_hints:
+  - "Начни с общего запроса — «хочу в тепло на декабрь»"
+  - "После первого ответа уточни направление (Мальдивы или Бали)"
+  - "Запроси детали: отель, звёзды, meal plan"
+  - "Уточни про визу, если агент не упомянул"
+  - "Заверши, когда получишь 2–3 конкретных варианта с ценами"
+ground_truth_intents:
+  - turn: 1
+    expected_intent: discovery
+  - turn: 2
+    expected_intent: itinerary_search
+  - turn: 3
+    expected_intent: itinerary_search
+  - turn: 4
+    expected_intent: policy_info
