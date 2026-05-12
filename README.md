@@ -462,3 +462,25 @@ TravelAgent/
 - [Продуктовое предложение](docs/product-proposal.md) — обоснование идеи, метрики, архитектура, data flow
 - [System Design](docs/system-design.md) — детальная архитектура, ADR, компонентные диаграммы
 - [Governance](docs/governance.md) — реестр рисков, политика логирования, безопасность
+
+### Спецификации компонентов (`docs/specs/`)
+
+| Спецификация | Домен | Описание |
+|---|---|---|
+| [spec-orchestrator.md](docs/specs/spec-orchestrator.md) | Backend | Orchestrator, Router, Decision Logic |
+| [spec-memory-context.md](docs/specs/spec-memory-context.md) | DBA | Memory Layer: Redis, PostgreSQL, Summarizer, Profile Updater |
+| [spec-observability.md](docs/specs/spec-observability.md) | DevOps | Метрики, логи, алерты, evals, Prompt Management |
+| [spec-tools-api.md](docs/specs/spec-tools-api.md) | Backend | Tools Layer: search_tours, create_lead, get_policy_info |
+| [spec-retriever.md](docs/specs/spec-retriever.md) | Backend | Retrieval-контур, векторный поиск |
+| [spec-serving-config.md](docs/specs/spec-serving-config.md) | DevOps | Конфигурация, деплой, LLM-провайдеры |
+
+### Диаграммы (`docs/diagrams/`)
+
+| Диаграмма | Описание |
+|---|---|
+| [state-machine-funnel.md](docs/diagrams/state-machine-funnel.md) | State Machine воронки продаж (cold → closing) |
+| [c4-context.md](docs/diagrams/c4-context.md) | C4 Context — система в окружении |
+| [c4-container.md](docs/diagrams/c4-container.md) | C4 Container — контейнеры системы |
+| [c4-component.md](docs/diagrams/c4-component.md) | C4 Component — компоненты ядра |
+| [data-flow.md](docs/diagrams/data-flow.md) | Поток данных |
+| [workflow-request.md](docs/diagrams/workflow-request.md) | Workflow обработки запроса |
